@@ -1,0 +1,26 @@
+import 'package:flutter/material.dart';
+import 'package:hero/features/auth/pages/login_page.dart';
+import 'package:hero/features/menu/pages/menu_screen.dart';
+
+/// Central route registry.
+/// Add new named routes here as features are added.
+abstract final class AppRoutes {
+  static const String login = '/';
+  static const String menu = MenuScreen.routeName;
+
+  static Route<void> onGenerateRoute(RouteSettings settings) {
+    switch (settings.name) {
+      case menu:
+        final title = settings.arguments as String? ?? 'Menu';
+        return MaterialPageRoute<void>(
+          builder: (_) => MenuScreen(title: title),
+          settings: settings,
+        );
+      default:
+        return MaterialPageRoute<void>(
+          builder: (_) => const LoginPage(),
+          settings: settings,
+        );
+    }
+  }
+}
