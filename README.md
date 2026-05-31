@@ -31,34 +31,36 @@ flutter run
 
 ```
 lib/
-├── main.dart                         # Entry point (minimal)
+├── main.dart
 ├── app/
 │   ├── hero_app.dart                 # MaterialApp, theme, routing
 │   ├── app_theme.dart                # Centralised colour/typography tokens
-│   └── app_routes.dart               # Named-route registry
+│   └── app_routes.dart               # Named-route registry (all 9 menus wired)
 ├── core/
-│   ├── enums/app_role.dart           # AppRole enum (staff → heroAdmin)
-│   ├── models/app_menu_item.dart     # Menu item data model
-│   ├── repositories/menu_repository.dart  # Abstract menu contract
-│   └── services/auth_service.dart    # Authentication logic
+│   ├── constants/app_constants.dart  # App-wide magic values
+│   ├── enums/app_role.dart
+│   ├── models/app_menu_item.dart
+│   ├── repositories/menu_repository.dart
+│   ├── services/auth_service.dart
+│   ├── utils/format_utils.dart       # Date/time formatting helpers
+│   └── widgets/feature_placeholder.dart  # Premium "Coming Soon" page
 └── features/
-    ├── auth/
-    │   ├── pages/login_page.dart     # Animated login page
-    │   └── widgets/                  # GlowOrb, CompanyLogo, UniformVisual, LoginCard
-    ├── home/pages/home_shell.dart    # Post-login shell with lazy-loaded menu
-    └── menu/
-        ├── pages/menu_screen.dart    # Individual module placeholder
-        └── repositories/mock_menu_repository.dart  # Mock DB (swap for real API)
+    ├── auth/pages/login_page.dart
+    ├── home/pages/home_shell.dart    # Dashboard, Tasks, Profile tabs
+    ├── attendance/
+    │   ├── pages/attendance_page.dart           # GPS map check-in
+    │   └── pages/attendance_revision_page.dart  # Revisi absen + approval
+    ├── menu/
+    │   ├── pages/menu_screen.dart
+    │   └── pages/organization_structure_page.dart  # Org tree chart
+    ├── leave/pages/leave_page.dart
+    ├── roster/pages/roster_page.dart
+    ├── meal_attendance/pages/meal_attendance_page.dart
+    ├── her_registration/pages/her_registration_page.dart
+    ├── schedule_revision/pages/schedule_revision_page.dart
+    └── payslip/pages/payslip_page.dart
 
-assets/images/
-├── indexim_logo.png                  # PT INDEXIM COALINDO logo
-└── indexim_uniform_person.png        # Company uniform visual
-
-docs/
-├── ARCHITECTURE.md                   # Layered architecture deep-dive
-├── FEATURES.md                       # Feature list & roadmap
-├── CONTRIBUTING.md                   # How to contribute
-└── ROADMAP.md                        # Release milestones
+# Each feature folder also has: models/, widgets/, repositories/ stubs
 ```
 
 ---
@@ -107,3 +109,37 @@ flutter:
 ---
 
 *© PT INDEXIM COALINDO · All rights reserved*
+
+---
+
+## Latest Session Handover
+
+**Branch**: `copilot/premium-home-ui-20260530`  
+**Last commit**: `83075f1` — HERO is now the **primary editing project**
+
+### Completed Features
+| Feature | Status | File |
+|---|---|---|
+| Login Page | ✅ Done | `auth/pages/login_page.dart` |
+| Home Dashboard | ✅ Done | `home/pages/home_shell.dart` |
+| Notification Center (HTML) | ✅ Done | inside `home_shell.dart` |
+| Quick Access (editable) | ✅ Done | inside `home_shell.dart` |
+| Attendance + GPS Map | ✅ Done | `attendance/pages/attendance_page.dart` |
+| Revisi Absen (form + approval) | ✅ Done | `attendance/pages/attendance_revision_page.dart` |
+| Struktur Organisasi | ✅ Done | `menu/pages/organization_structure_page.dart` |
+| Profile (premium full) | ✅ Done | inside `home_shell.dart` |
+| Leave, Roster, Absen Makan, Her Reg, Revisi Jadwal, Payslip | 🚧 Stub | `features/<name>/pages/` |
+
+### Deploy Command (Samsung SM G975F)
+```powershell
+Set-Location "D:\4. PROJECT\13. Mobile\HERO"
+$env:GRADLE_USER_HOME = "D:\.gradle-hero"
+flutter run -d RR8M601DR3Z
+```
+
+### Key Notes
+- **This folder (HERO) is the primary editing project** — edit here directly
+- `pubspec.yaml` in HERO includes `flutter_map` + `latlong2` for the GPS attendance page — do NOT remove them
+- Color palette: navy `0xFF061B49`, blue `0xFF156DFF`, muted `0xFF718096`; font: `Poppins`
+- All 9 Quick Access menus are routed in `AppRoutes` + `_openMenu()`
+
