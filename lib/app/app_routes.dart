@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hero/core/models/app_menu_item.dart';
 import 'package:hero/features/auth/pages/login_page.dart';
 import 'package:hero/features/menu/pages/menu_screen.dart';
 
@@ -11,9 +12,12 @@ abstract final class AppRoutes {
   static Route<void> onGenerateRoute(RouteSettings settings) {
     switch (settings.name) {
       case menu:
-        final title = settings.arguments as String? ?? 'Menu';
+        final selectedMenu = settings.arguments as AppMenuItem?;
         return MaterialPageRoute<void>(
-          builder: (_) => MenuScreen(title: title),
+          builder: (_) => MenuScreen(
+            title: selectedMenu?.title ?? 'Menu',
+            route: selectedMenu?.route,
+          ),
           settings: settings,
         );
       default:
