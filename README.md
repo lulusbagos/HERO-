@@ -11,6 +11,56 @@
 
 ---
 
+## Latest Session Handover
+
+This section is the quickest way to continue development after the latest UI work.
+
+### Completed in this session
+
+- Notification bell in Home header is now clickable and opens **Notification Center**
+- Notification Center has premium card UI, clean hierarchy, and smooth tap feedback
+- Notification content supports HTML rendering (`flutter_html`)
+- Read vs unread notifications now use different visual states (color, border, emphasis)
+- Quick Access now has professional **Edit** flow with bottom sheet menu selector
+- Quick Access can be customized up to 8 menu items
+- **Her Registration** color has been normalized to the same blue family as core primary menus
+
+### Files touched
+
+- `lib/features/home/pages/home_shell.dart`
+- `pubspec.yaml`
+- `pubspec.lock`
+
+### Local run (source project)
+
+```bash
+flutter pub get
+flutter run
+```
+
+### Device deploy flow used by team
+
+```powershell
+# 1) sync source to deploy project
+Copy-Item "D:\4. PROJECT\6. Android\HRGA\lib\features\home\pages\home_shell.dart" "D:\4. PROJECT\13. Mobile\HERO\lib\features\home\pages\home_shell.dart" -Force
+
+# 2) install dependencies in deploy project
+Set-Location "D:\4. PROJECT\13. Mobile\HERO"
+flutter pub get
+
+# 3) run to physical Samsung device
+$env:GRADLE_USER_HOME = "D:\.gradle-hero"
+flutter run -d RR8M601DR3Z
+```
+
+### Notes for next continuation
+
+- Keep `GRADLE_USER_HOME` pinned to `D:\.gradle-hero` for stable Android builds on this machine.
+- If adding/removing dependencies, run `flutter pub get` in both source and deploy project when both are used.
+- Notification Center data is currently mock/local state in Home shell and can be swapped to API later without changing card UI structure.
+
+---
+
 ## Quick Start
 
 ```bash
