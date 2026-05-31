@@ -26,6 +26,31 @@ class MockMenuRepository implements MenuRepository {
         route: '/announcement',
         icon: Icons.campaign_outlined,
       ),
+      AppMenuItem(
+        title: 'Profile',
+        route: '/profile',
+        icon: Icons.badge_outlined,
+      ),
+      AppMenuItem(
+        title: 'Work Schedule Revision',
+        route: '/work-schedule-revision',
+        icon: Icons.schedule_send_outlined,
+      ),
+      AppMenuItem(
+        title: 'HER Registration',
+        route: '/her-registration',
+        icon: Icons.app_registration_outlined,
+      ),
+      AppMenuItem(
+        title: "Today's Birthdays",
+        route: '/birthdays',
+        icon: Icons.cake_outlined,
+      ),
+      AppMenuItem(
+        title: 'Notifications',
+        route: '/notifications',
+        icon: Icons.notifications_active_outlined,
+      ),
     ];
 
     switch (role) {
