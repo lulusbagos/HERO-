@@ -31,6 +31,23 @@ void main() {
     expect(find.byKey(const ValueKey('unread-notification')), findsOneWidget);
   });
 
+  testWidgets('profile shows employee id QR only', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: MenuScreen(
+          title: 'Profile',
+          route: '/profile',
+        ),
+      ),
+    );
+
+    expect(find.text('Employee ID'), findsOneWidget);
+    expect(find.text('EMP-000123'), findsOneWidget);
+    expect(find.byIcon(Icons.qr_code_2_rounded), findsOneWidget);
+    expect(find.text('Personal Information'), findsNothing);
+    expect(find.text('Work Information'), findsNothing);
+  });
+
   testWidgets('edit quick actions reveals movable dummy menus',
       (WidgetTester tester) async {
     await tester.pumpWidget(

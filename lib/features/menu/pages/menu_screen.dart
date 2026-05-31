@@ -67,21 +67,31 @@ class _MenuScreenState extends State<MenuScreen> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Employee Profile', style: Theme.of(context).textTheme.titleLarge),
+            Text('Employee ID', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 12),
             Card(
-              child: ListTile(
-                leading: const Icon(Icons.badge_outlined),
-                title: const Text('Employee ID'),
-                subtitle: const Text('EMP-000123'),
-                trailing: Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Theme.of(context).colorScheme.outline),
-                  ),
-                  child: const Icon(Icons.qr_code_2_rounded, size: 42),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Text(
+                      'EMP-000123',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      width: 160,
+                      height: 160,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                      ),
+                      child: const Icon(Icons.qr_code_2_rounded, size: 120),
+                    ),
+                  ],
                 ),
               ),
             ),
