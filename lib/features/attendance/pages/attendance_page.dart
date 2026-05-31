@@ -2,8 +2,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
 import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart' hide Path;
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+
+import 'attendance_calendar_page.dart';
 
 class AttendancePage extends StatefulWidget {
   const AttendancePage({super.key});
@@ -29,7 +33,16 @@ class _AttendancePageState extends State<AttendancePage> {
 
   static const double officeLat = -6.2088;
   static const double officeLng = 106.8456;
-  static const double attendanceRadiusMeter = 100;
+
+  /// Geofence polygon — titik-titik yang membentuk area absensi yang valid
+  static const List<LatLng> officePolygon = [
+    LatLng(-6.2081, 106.8449), // NW
+    LatLng(-6.2081, 106.8463), // NE
+    LatLng(-6.2088, 106.8467), // E
+    LatLng(-6.2095, 106.8463), // SE
+    LatLng(-6.2095, 106.8449), // SW
+    LatLng(-6.2088, 106.8445), // W
+  ];
 
   double userLat = -6.2092;
   double userLng = 106.8450;
@@ -49,6 +62,21 @@ class _AttendancePageState extends State<AttendancePage> {
   double? _lastLng;
   DateTime? _lastFixTime;
 
+  // Attendance history (mock data — replace with API in production)
+  final List<AttendanceRecord> _history = [
+    AttendanceRecord(date: DateTime(2026, 5, 31), type: AttendanceRecordType.checkIn,  time: '08:12', location: 'Office Area'),
+    AttendanceRecord(date: DateTime(2026, 5, 31), type: AttendanceRecordType.checkOut, time: '17:03', location: 'Office Area'),
+    AttendanceRecord(date: DateTime(2026, 5, 30), type: AttendanceRecordType.checkIn,  time: '08:47', location: 'Office Area'),
+    AttendanceRecord(date: DateTime(2026, 5, 30), type: AttendanceRecordType.checkOut, time: '17:11', location: 'Office Area'),
+    AttendanceRecord(date: DateTime(2026, 5, 29), type: AttendanceRecordType.checkIn,  time: '09:02', location: 'Office Area'),
+    AttendanceRecord(date: DateTime(2026, 5, 28), type: AttendanceRecordType.checkIn,  time: '08:30', location: 'Office Area'),
+    AttendanceRecord(date: DateTime(2026, 5, 28), type: AttendanceRecordType.checkOut, time: '16:55', location: 'Office Area'),
+    AttendanceRecord(date: DateTime(2026, 5, 27), type: AttendanceRecordType.checkIn,  time: '08:22', location: 'Office Area'),
+    AttendanceRecord(date: DateTime(2026, 5, 27), type: AttendanceRecordType.checkOut, time: '17:30', location: 'Office Area'),
+    AttendanceRecord(date: DateTime(2026, 5, 26), type: AttendanceRecordType.checkIn,  time: '08:10', location: 'Office Area'),
+    AttendanceRecord(date: DateTime(2026, 5, 26), type: AttendanceRecordType.checkOut, time: '17:05', location: 'Office Area'),
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -58,12 +86,29 @@ class _AttendancePageState extends State<AttendancePage> {
 
   void _calculateDistanceStatus() {
     final distance = _distanceInMeters(userLat, userLng, officeLat, officeLng);
-    final withinArea = distance <= attendanceRadiusMeter;
+    final inPolygon = _isPointInPolygon(LatLng(userLat, userLng), officePolygon);
 
     setState(() {
       distanceToOfficeMeter = distance;
-      isWithinArea = withinArea && isLocationTrusted;
+      isWithinArea = inPolygon && isLocationTrusted;
     });
+  }
+
+  bool _isPointInPolygon(LatLng point, List<LatLng> polygon) {
+    final n = polygon.length;
+    bool inside = false;
+    final px = point.longitude;
+    final py = point.latitude;
+    for (int i = 0, j = n - 1; i < n; j = i++) {
+      final xi = polygon[i].longitude;
+      final yi = polygon[i].latitude;
+      final xj = polygon[j].longitude;
+      final yj = polygon[j].latitude;
+      final intersect =
+          ((yi > py) != (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi);
+      if (intersect) inside = !inside;
+    }
+    return inside;
   }
 
   double _distanceInMeters(
@@ -265,9 +310,6 @@ class _AttendancePageState extends State<AttendancePage> {
 
   @override
   Widget build(BuildContext context) {
-    final todayDate = DateFormat('MMM dd, yyyy').format(DateTime.now());
-    final todayDay = DateFormat('EEEE').format(DateTime.now());
-
     return Scaffold(
       body: Stack(
         children: [
@@ -280,30 +322,35 @@ class _AttendancePageState extends State<AttendancePage> {
                 children: [
                   _Header(
                     onBack: () => Navigator.of(context).maybePop(),
-                    onCalendar: () {},
-                  ),
-                  const SizedBox(height: 22),
-                  _StatusCard(
-                    statusText: 'Not Checked In',
-                    description: 'You have not checked in today',
-                    date: todayDate,
-                    day: todayDay,
+                    onCalendar: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => AttendanceCalendarPage(records: _history),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 18),
+                  _CompactInfoStrip(
+                    currentTime: currentTime,
+                    distanceText: '${distanceToOfficeMeter.toStringAsFixed(1)} m',
+                    isLocationTrusted: isLocationTrusted,
+                    isWithinArea: isWithinArea,
+                  ),
+                  const SizedBox(height: 14),
                   _AttendanceAreaCard(
                     officeLat: officeLat,
                     officeLng: officeLng,
                     userLat: userLat,
                     userLng: userLng,
-                    radiusMeter: attendanceRadiusMeter,
+                    polygonPoints: officePolygon,
                     isWithinArea: isWithinArea,
                     isLoadingLocation: isLoadingLocation,
                     isLocationTrusted: isLocationTrusted,
                     trustMessage: trustMessage,
-                    trustFlags: trustFlags,
                     onRefreshLocation: _getCurrentLocation,
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
                   _SelectTypeCard(
                     selectedType: selectedType,
                     onChanged: (value) {
@@ -312,15 +359,7 @@ class _AttendancePageState extends State<AttendancePage> {
                       });
                     },
                   ),
-                  const SizedBox(height: 18),
-                  _InformationCard(
-                    currentTime: currentTime,
-                    locationName: 'Office Area',
-                    city: 'Jakarta, ID',
-                    radiusText: '${attendanceRadiusMeter.toInt()} m',
-                    distanceText: '${distanceToOfficeMeter.toStringAsFixed(1)} m',
-                  ),
-                  const SizedBox(height: 22),
+                  const SizedBox(height: 16),
                   _SubmitButton(
                     enabled: isWithinArea && isLocationTrusted,
                     onTap: _submitAttendance,
@@ -329,6 +368,121 @@ class _AttendancePageState extends State<AttendancePage> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompactInfoStrip extends StatelessWidget {
+  const _CompactInfoStrip({
+    required this.currentTime,
+    required this.distanceText,
+    required this.isLocationTrusted,
+    required this.isWithinArea,
+  });
+
+  final String currentTime;
+  final String distanceText;
+  final bool isLocationTrusted;
+  final bool isWithinArea;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: _softCardDecoration(radius: 18),
+      child: Row(
+        children: [
+          Expanded(
+            child: _MiniStat(
+              icon: Icons.access_time_rounded,
+              label: 'Time',
+              value: currentTime,
+            ),
+          ),
+          Container(width: 1, height: 28, color: const Color(0xFFE3E9F3)),
+          Expanded(
+            child: _MiniStat(
+              icon: Icons.pin_drop_outlined,
+              label: 'Distance',
+              value: distanceText,
+            ),
+          ),
+          Container(width: 1, height: 28, color: const Color(0xFFE3E9F3)),
+          Expanded(
+            child: _MiniStat(
+              icon: isLocationTrusted
+                  ? Icons.verified_rounded
+                  : Icons.warning_amber_rounded,
+              label: 'Signal',
+              value: isLocationTrusted ? 'Trusted' : 'Blocked',
+              valueColor: isLocationTrusted
+                  ? _AttendancePageState.green
+                  : _AttendancePageState.orange,
+              helper: isWithinArea ? 'In Area' : 'Out Area',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  const _MiniStat({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.valueColor,
+    this.helper,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color? valueColor;
+  final String? helper;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 15, color: _AttendancePageState.blue),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: const TextStyle(
+                  color: _AttendancePageState.mutedText,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: TextStyle(
+              color: valueColor ?? _AttendancePageState.navy,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          if (helper != null)
+            Text(
+              helper!,
+              style: const TextStyle(
+                color: _AttendancePageState.mutedText,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
         ],
       ),
     );
@@ -619,18 +773,17 @@ class _StatusCard extends StatelessWidget {
   }
 }
 
-class _AttendanceAreaCard extends StatelessWidget {
+class _AttendanceAreaCard extends StatefulWidget {
   const _AttendanceAreaCard({
     required this.officeLat,
     required this.officeLng,
     required this.userLat,
     required this.userLng,
-    required this.radiusMeter,
+    required this.polygonPoints,
     required this.isWithinArea,
     required this.isLoadingLocation,
     required this.isLocationTrusted,
     required this.trustMessage,
-    required this.trustFlags,
     required this.onRefreshLocation,
   });
 
@@ -638,313 +791,258 @@ class _AttendanceAreaCard extends StatelessWidget {
   final double officeLng;
   final double userLat;
   final double userLng;
-  final double radiusMeter;
+  final List<LatLng> polygonPoints;
   final bool isWithinArea;
   final bool isLoadingLocation;
   final bool isLocationTrusted;
   final String trustMessage;
-  final List<String> trustFlags;
   final VoidCallback onRefreshLocation;
 
   @override
+  State<_AttendanceAreaCard> createState() => _AttendanceAreaCardState();
+}
+
+class _AttendanceAreaCardState extends State<_AttendanceAreaCard> {
+  final MapController _mapController = MapController();
+
+  @override
+  void didUpdateWidget(_AttendanceAreaCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.userLat != widget.userLat || oldWidget.userLng != widget.userLng) {
+      if (widget.userLat != 0 && widget.userLng != 0) {
+        _mapController.move(
+          LatLng(widget.userLat, widget.userLng),
+          _mapController.camera.zoom,
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final officeLat    = widget.officeLat;
+    final officeLng    = widget.officeLng;
+    final userLat      = widget.userLat;
+    final userLng      = widget.userLng;
+    final polygon      = widget.polygonPoints;
+    final isWithinArea      = widget.isWithinArea;
+    final isLoadingLocation = widget.isLoadingLocation;
+    final isLocationTrusted = widget.isLocationTrusted;
+    final trustMessage      = widget.trustMessage;
+    final onRefreshLocation = widget.onRefreshLocation;
+
+    final statusColor = isWithinArea
+        ? _AttendancePageState.green
+        : _AttendancePageState.orange;
+    final statusIcon = isWithinArea
+        ? Icons.check_circle_rounded
+        : Icons.warning_rounded;
+    final statusText = isWithinArea
+        ? 'Di dalam area absensi'
+        : 'Di luar area absensi';
+
     return Container(
       decoration: _softCardDecoration(radius: 24),
-      padding: const EdgeInsets.all(14),
+      clipBehavior: Clip.antiAlias,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ── Office info header ───────────────────────────────────────
           Padding(
-            padding: const EdgeInsets.fromLTRB(8, 6, 8, 12),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final compact = constraints.maxWidth < 420;
-                if (compact) {
-                  return Column(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+            child: Row(
+              children: [
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: _AttendancePageState.softBlue,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.apartment_rounded,
+                    color: _AttendancePageState.blue,
+                    size: 26,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      const Text(
+                        'Attendance Area',
+                        style: TextStyle(
+                          color: _AttendancePageState.mutedText,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
                       Row(
                         children: [
-                          Container(
-                            width: 50,
-                            height: 50,
-                            decoration: BoxDecoration(
-                              color: _AttendancePageState.softBlue,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: const Icon(
-                              Icons.apartment_rounded,
-                              color: _AttendancePageState.blue,
-                              size: 28,
+                          const Text(
+                            'Office Area',
+                            style: TextStyle(
+                              color: _AttendancePageState.navy,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
                             ),
                           ),
-                          const SizedBox(width: 12),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Attendance Area',
-                                  style: TextStyle(
-                                    color: _AttendancePageState.mutedText,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    Flexible(
-                                      child: Text(
-                                        'Office Area',
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: _AttendancePageState.navy,
-                                          fontSize: 19,
-                                          fontWeight: FontWeight.w900,
-                                        ),
-                                      ),
-                                    ),
-                                    SizedBox(width: 8),
-                                    _ActiveBadge(),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
+                          const SizedBox(width: 8),
+                          const _ActiveBadge(),
                         ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 2),
                       const Text(
-                        'Jl. Sudirman No.123, Jakarta Pusat, DKI Jakarta',
+                        'Jl. Sudirman No.123, Jakarta Pusat',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: _AttendancePageState.mutedText,
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: _MapActionButton(
-                          label: 'Center',
-                          icon: PhosphorIconsRegular.crosshair,
-                          onTap: onRefreshLocation,
-                        ),
-                      ),
                     ],
-                  );
-                }
-
-                return Row(
-                  children: [
-                    Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        color: _AttendancePageState.softBlue,
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: const Icon(
-                        Icons.apartment_rounded,
-                        color: _AttendancePageState.blue,
-                        size: 30,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Attendance Area',
-                            style: TextStyle(
-                              color: _AttendancePageState.mutedText,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Text(
-                                'Office Area',
-                                style: TextStyle(
-                                  color: _AttendancePageState.navy,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              SizedBox(width: 8),
-                              _ActiveBadge(),
-                            ],
-                          ),
-                          SizedBox(height: 5),
-                          Text(
-                            'Jl. Sudirman No.123, Jakarta Pusat, DKI Jakarta',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: _AttendancePageState.mutedText,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _MapActionButton(
-                      label: 'Center',
-                      icon: PhosphorIconsRegular.crosshair,
-                      onTap: onRefreshLocation,
-                    ),
-                  ],
-                );
-              },
+                  ),
+                ),
+              ],
             ),
           ),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: SizedBox(
-              height: 250,
-              child: Stack(
-                children: [
-                  const Positioned.fill(child: _PseudoMapBackground()),
-                  Positioned.fill(
-                    child: CustomPaint(
-                      painter: _SecureRadiusPainter(),
+
+          // ── Map ──────────────────────────────────────────────────────
+          SizedBox(
+            height: 220,
+            child: Stack(
+              children: [
+                FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: LatLng(officeLat, officeLng),
+                    initialZoom: 16.5,
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.pinchZoom |
+                             InteractiveFlag.drag,
                     ),
                   ),
-                  const Align(
-                    alignment: Alignment.center,
-                    child: _MapPin(
-                      icon: Icons.location_on_rounded,
-                      color: _AttendancePageState.blue,
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      userAgentPackageName: 'com.indexim.hero',
+                      maxZoom: 19,
                     ),
-                  ),
-                  const Align(
-                    alignment: Alignment(-0.20, 0.22),
-                    child: _UserLocationDot(),
-                  ),
-                  Positioned(
-                    right: 16,
-                    bottom: 96,
-                    child: GestureDetector(
-                      onTap: onRefreshLocation,
-                      child: Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(18),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.10),
-                              blurRadius: 16,
-                              offset: const Offset(0, 8),
-                            ),
-                          ],
+                    // Geofence polygon
+                    PolygonLayer(
+                      polygons: [
+                        Polygon(
+                          points: polygon,
+                          color: const Color(0xFF156DFF).withValues(alpha: 0.13),
+                          borderColor: const Color(0xFF156DFF),
+                          borderStrokeWidth: 2.0,
                         ),
-                        child: isLoadingLocation
-                            ? const Padding(
-                                padding: EdgeInsets.all(14),
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: _AttendancePageState.blue,
-                                ),
-                              )
-                            : const Icon(
-                                Icons.my_location_rounded,
-                                color: _AttendancePageState.navy,
-                              ),
-                      ),
+                      ],
                     ),
-                  ),
-                  Positioned(
-                    left: 16,
-                    right: 16,
-                    bottom: 16,
-                    child: Container(
-                      padding: const EdgeInsets.all(15),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.94),
-                        borderRadius: BorderRadius.circular(18),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _AttendancePageState.navy.withValues(alpha: 0.08),
-                            blurRadius: 18,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(
-                                isWithinArea
-                                    ? Icons.check_circle_rounded
-                                    : Icons.warning_rounded,
-                                color: isWithinArea
-                                    ? _AttendancePageState.green
-                                    : _AttendancePageState.orange,
-                                size: 24,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Text(
-                                  isWithinArea
-                                      ? 'You are within the attendance area'
-                                      : 'You are outside or location is not trusted',
-                                  style: const TextStyle(
-                                    color: _AttendancePageState.navy,
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                              ),
+                    // Polyline user → office
+                    if (userLat != 0 && userLng != 0)
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(
+                            points: [
+                              LatLng(userLat, userLng),
+                              LatLng(officeLat, officeLng),
                             ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            trustMessage,
-                            style: TextStyle(
-                              color: isLocationTrusted
-                                  ? _AttendancePageState.green
-                                  : _AttendancePageState.orange,
-                              fontSize: 12.3,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          if (trustFlags.isNotEmpty) ...[
-                            const SizedBox(height: 5),
-                            Text(
-                              trustFlags.join(' • '),
-                              style: const TextStyle(
-                                color: _AttendancePageState.mutedText,
-                                fontSize: 11.8,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 5),
-                          Text(
-                            'Office: ${officeLat.toStringAsFixed(4)}, ${officeLng.toStringAsFixed(4)} | You: ${userLat.toStringAsFixed(4)}, ${userLng.toStringAsFixed(4)}',
-                            style: const TextStyle(
-                              color: _AttendancePageState.mutedText,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            color: const Color(0xFF156DFF).withValues(alpha: 0.55),
+                            strokeWidth: 2.2,
+                            isDotted: true,
                           ),
                         ],
                       ),
+                    // Markers
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: LatLng(officeLat, officeLng),
+                          width: 44,
+                          height: 52,
+                          alignment: Alignment.bottomCenter,
+                          child: const _OfficePinMarker(),
+                        ),
+                        if (userLat != 0 && userLng != 0)
+                          Marker(
+                            point: LatLng(userLat, userLng),
+                            width: 80,
+                            height: 88,
+                            alignment: Alignment.bottomCenter,
+                            child: const _UserLocationPin(),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+
+                // Location button — bottom right
+                Positioned(
+                  right: 10,
+                  bottom: 10,
+                  child: _LocationFab(
+                    isLoading: isLoadingLocation,
+                    onTap: onRefreshLocation,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // ── Status strip below map ───────────────────────────────────
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: const BoxDecoration(
+              border: Border(
+                top: BorderSide(color: Color(0xFFEDF2F7), width: 1),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(statusIcon, color: statusColor, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    statusText,
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                ],
-              ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isLocationTrusted
+                        ? const Color(0xFFECFDF5)
+                        : const Color(0xFFFFF7ED),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    trustMessage,
+                    style: TextStyle(
+                      color: isLocationTrusted
+                          ? _AttendancePageState.green
+                          : _AttendancePageState.orange,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -953,65 +1051,47 @@ class _AttendanceAreaCard extends StatelessWidget {
   }
 }
 
-class _PseudoMapBackground extends StatelessWidget {
-  const _PseudoMapBackground();
+class _LocationFab extends StatelessWidget {
+  const _LocationFab({required this.isLoading, required this.onTap});
+
+  final bool isLoading;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFFF3F7FF),
-      child: CustomPaint(
-        painter: _PseudoMapPainter(),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.12),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: isLoading
+            ? const Padding(
+                padding: EdgeInsets.all(10),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: _AttendancePageState.blue,
+                ),
+              )
+            : const Icon(
+                Icons.my_location_rounded,
+                color: _AttendancePageState.blue,
+                size: 20,
+              ),
       ),
     );
   }
 }
-
-class _PseudoMapPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final roadPaint = Paint()
-      ..color = const Color(0xFFDDE7F7)
-      ..strokeWidth = 2;
-
-    for (int i = 0; i < 10; i++) {
-      final y = (i + 1) * size.height / 10;
-      canvas.drawLine(Offset(0, y), Offset(size.width, y + 8), roadPaint);
-    }
-
-    for (int i = 0; i < 7; i++) {
-      final x = (i + 1) * size.width / 7;
-      canvas.drawLine(Offset(x, 0), Offset(x + 12, size.height), roadPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class _SecureRadiusPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.shortestSide * 0.33;
-
-    final fillPaint = Paint()
-      ..color = _AttendancePageState.blue.withValues(alpha: 0.14)
-      ..style = PaintingStyle.fill;
-
-    final strokePaint = Paint()
-      ..color = _AttendancePageState.blue
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.6;
-
-    canvas.drawCircle(center, radius, fillPaint);
-    canvas.drawCircle(center, radius, strokePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
 class _ActiveBadge extends StatelessWidget {
   const _ActiveBadge();
 
@@ -1050,33 +1130,34 @@ class _MapActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white.withValues(alpha: 0.94),
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
           decoration: BoxDecoration(
             border: Border.all(color: const Color(0xFFE1E8F2)),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             boxShadow: [
               BoxShadow(
                 color: _AttendancePageState.navy.withValues(alpha: 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
               ),
             ],
           ),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: _AttendancePageState.blue, size: 18),
-              const SizedBox(width: 7),
+              Icon(icon, color: _AttendancePageState.blue, size: 16),
+              const SizedBox(width: 6),
               Text(
                 label,
                 style: const TextStyle(
                   color: _AttendancePageState.blue,
-                  fontSize: 12.5,
-                  fontWeight: FontWeight.w800,
+                  fontSize: 11.8,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -1087,53 +1168,134 @@ class _MapActionButton extends StatelessWidget {
   }
 }
 
-class _MapPin extends StatelessWidget {
-  const _MapPin({required this.icon, required this.color});
-
-  final IconData icon;
-  final Color color;
+class _OfficePinMarker extends StatelessWidget {
+  const _OfficePinMarker();
 
   @override
   Widget build(BuildContext context) {
-    return Icon(
-      icon,
-      color: color,
-      size: 54,
-      shadows: [
-        Shadow(
-          color: color.withValues(alpha: 0.24),
-          blurRadius: 14,
-          offset: const Offset(0, 6),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: _AttendancePageState.blue,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: _AttendancePageState.blue.withValues(alpha: 0.45),
+                blurRadius: 14,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.apartment_rounded, color: Colors.white, size: 22),
+        ),
+        CustomPaint(
+          size: const Size(14, 9),
+          painter: _PinTailPainter(color: _AttendancePageState.blue),
         ),
       ],
     );
   }
 }
 
-class _UserLocationDot extends StatelessWidget {
-  const _UserLocationDot();
+class _PinTailPainter extends CustomPainter {
+  const _PinTailPainter({required this.color});
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color;
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _PinTailPainter oldDelegate) => oldDelegate.color != color;
+}
+
+class _UserLocationPin extends StatelessWidget {
+  const _UserLocationPin();
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Container(
-        width: 22,
-        height: 22,
-        decoration: BoxDecoration(
-          color: _AttendancePageState.blue,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 4),
-          boxShadow: [
-            BoxShadow(
-              color: _AttendancePageState.blue.withValues(alpha: 0.30),
-              blurRadius: 14,
-              spreadRadius: 4,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // label card
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: _AttendancePageState.blue,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: _AttendancePageState.blue.withValues(alpha: 0.40),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              ),
+            ],
+          ),
+          child: const Text(
+            'Saya',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.2,
             ),
-          ],
+          ),
         ),
-      ),
+        // triangle tail
+        CustomPaint(
+          size: const Size(10, 6),
+          painter: _DownTrianglePainter(color: _AttendancePageState.blue),
+        ),
+        // pulsing dot
+        Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: _AttendancePageState.blue,
+            border: Border.all(color: Colors.white, width: 3),
+            boxShadow: [
+              BoxShadow(
+                color: _AttendancePageState.blue.withValues(alpha: 0.45),
+                blurRadius: 12,
+                spreadRadius: 4,
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
+}
+
+class _DownTrianglePainter extends CustomPainter {
+  const _DownTrianglePainter({required this.color});
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..color = color;
+    final path = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width / 2, size.height)
+      ..close();
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(_DownTrianglePainter old) => old.color != color;
 }
 
 class _SelectTypeCard extends StatelessWidget {
@@ -1148,10 +1310,13 @@ class _SelectTypeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isCheckIn = selectedType == AttendanceType.checkIn;
+    final activeColor = isCheckIn
+        ? _AttendancePageState.green
+        : const Color(0xFFE24C4B);
 
     return Container(
       decoration: _softCardDecoration(radius: 24),
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1159,130 +1324,130 @@ class _SelectTypeCard extends StatelessWidget {
             'Attendance Type',
             style: TextStyle(
               color: _AttendancePageState.navy,
-              fontSize: 17,
-              fontWeight: FontWeight.w900,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 6),
-          const Text(
-            'Choose whether you want to check in or check out',
-            style: TextStyle(
-              color: _AttendancePageState.mutedText,
-              fontSize: 13.5,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 10),
           Container(
-            height: 66,
+            height: 48,
             decoration: BoxDecoration(
-              color: const Color(0xFFF3F7FF),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: const Color(0xFFE2EAF6)),
+              color: const Color(0xFFF4F7FC),
+              borderRadius: BorderRadius.circular(999),
+              border: Border.all(color: const Color(0xFFD9E3F0)),
             ),
-            child: Stack(
-              children: [
-                AnimatedAlign(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeOutCubic,
-                  alignment:
-                      isCheckIn ? Alignment.centerLeft : Alignment.centerRight,
-                  child: FractionallySizedBox(
-                    widthFactor: 0.5,
-                    child: Container(
-                      margin: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _AttendancePageState.navy.withValues(alpha: 0.08),
-                            blurRadius: 14,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-                Row(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final knobSize = 20.0;
+                final sliderWidth = (constraints.maxWidth - 6) / 2;
+                return Stack(
                   children: [
-                    Expanded(
-                      child: _AttendanceSwitchOption(
-                        label: 'Check In',
-                        icon: Icons.login_rounded,
-                        activeColor: _AttendancePageState.green,
-                        selected: isCheckIn,
-                        onTap: () => onChanged(AttendanceType.checkIn),
+                    AnimatedAlign(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOutCubic,
+                      alignment:
+                          isCheckIn ? Alignment.centerLeft : Alignment.centerRight,
+                      child: Container(
+                        width: sliderWidth,
+                        margin: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: activeColor,
+                          borderRadius: BorderRadius.circular(999),
+                          boxShadow: [
+                            BoxShadow(
+                              color: activeColor.withValues(alpha: 0.22),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Row(
+                            children: [
+                              if (!isCheckIn)
+                                Container(
+                                  width: knobSize,
+                                  height: knobSize,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: _AttendancePageState.navy.withValues(alpha: 0.15),
+                                        blurRadius: 5,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              const Spacer(),
+                              if (isCheckIn)
+                                Container(
+                                  width: knobSize,
+                                  height: knobSize,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: _AttendancePageState.navy.withValues(alpha: 0.15),
+                                        blurRadius: 5,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                    Expanded(
-                      child: _AttendanceSwitchOption(
-                        label: 'Check Out',
-                        icon: Icons.logout_rounded,
-                        activeColor: _AttendancePageState.orange,
-                        selected: !isCheckIn,
-                        onTap: () => onChanged(AttendanceType.checkOut),
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(999),
+                            onTap: () => onChanged(AttendanceType.checkIn),
+                            child: Center(
+                              child: Text(
+                                'IN',
+                                style: TextStyle(
+                                  color: isCheckIn
+                                      ? Colors.white
+                                      : const Color(0xFF617086),
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.15,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(999),
+                            onTap: () => onChanged(AttendanceType.checkOut),
+                            child: Center(
+                              child: Text(
+                                'OUT',
+                                style: TextStyle(
+                                  color: !isCheckIn
+                                      ? Colors.white
+                                      : const Color(0xFF617086),
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: 0.15,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AttendanceSwitchOption extends StatelessWidget {
-  const _AttendanceSwitchOption({
-    required this.label,
-    required this.icon,
-    required this.activeColor,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final Color activeColor;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = selected ? activeColor : const Color(0xFF8792A4);
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 180),
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: selected ? activeColor.withValues(alpha: 0.13) : Colors.white,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: selected ? activeColor : const Color(0xFFC4CDDA),
-                width: selected ? 5 : 2,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Icon(icon, color: color, size: 24),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: TextStyle(
-              color: selected ? _AttendancePageState.navy : color,
-              fontSize: 15,
-              fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                );
+              },
             ),
           ),
         ],
@@ -1448,36 +1613,36 @@ class _SubmitButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: enabled ? onTap : null,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(16),
           child: Ink(
-            height: 62,
+            height: 56,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
                 colors: [Color(0xFF1677FF), Color(0xFF0A52E8)],
                 begin: Alignment.centerLeft,
                 end: Alignment.centerRight,
               ),
-              borderRadius: BorderRadius.circular(18),
+              borderRadius: BorderRadius.circular(16),
               boxShadow: [
                 BoxShadow(
                   color: _AttendancePageState.blue.withValues(alpha: 0.20),
-                  blurRadius: 16,
-                  offset: const Offset(0, 8),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
                 ),
               ],
             ),
             child: const Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.fingerprint_rounded, color: Colors.white, size: 27),
-                SizedBox(width: 12),
+                Icon(Icons.fingerprint_rounded, color: Colors.white, size: 24),
+                SizedBox(width: 10),
                 Text(
                   'ABSEN',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.5,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.35,
                   ),
                 ),
               ],
